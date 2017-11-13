@@ -201,9 +201,9 @@ class Seq2Seq(nn.Module):
         norms = torch.norm(hidden, 2, 1)
         
         # For older versions of PyTorch use:
-        hidden = torch.div(hidden, norms.expand_as(hidden))
+        # hidden = torch.div(hidden, norms.expand_as(hidden))
         # For newest version of PyTorch (as of 8/25) use this:
-        # hidden = torch.div(hidden, norms.unsqueeze(1).expand_as(hidden))
+        hidden = torch.div(hidden, norms.unsqueeze(1).expand_as(hidden))
 
         if noise and self.noise_radius > 0:
             gauss_noise = torch.normal(means=torch.zeros(hidden.size()),
@@ -254,7 +254,7 @@ class Seq2Seq(nn.Module):
 
         embedding = self.embedding_decoder(self.start_symbols)
         inputs = torch.cat([embedding, hidden.unsqueeze(1)], 2)
-
+        # print(embedding.size(), hidden.size())
         # unroll
         all_indices = []
         for i in range(maxlen):
@@ -271,9 +271,15 @@ class Seq2Seq(nn.Module):
             all_indices.append(indices)
 
             embedding = self.embedding_decoder(indices)
-            inputs = torch.cat([embedding, hidden.unsqueeze(1)], 2)
-
-        max_indices = torch.cat(all_indices, 1)
+            # print(embedding.size(), hidden.size())
+            if len(embedding.size()) < 3:
+                embedding = embedding.unsqueeze(1)
+            try:
+                inputs = torch.cat([embedding, hidden.unsqueeze(1)], 2)
+            except:
+                print(embedding.size(), hidden.size())
+                raise
+        max_indices = torch.stack(all_indices, 1)
 
         return max_indices
 

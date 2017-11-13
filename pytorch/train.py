@@ -308,6 +308,7 @@ def train_lm(eval_path, save_path):
             f.write(word+"\n")
         for idx in indices:
             # generated sentence
+            idx : np.ndarray = idx.flatten()
             words = [corpus.dictionary.idx2word[x] for x in idx]
             # truncate sentences to first occurrence of <eos>
             truncated_sent = []

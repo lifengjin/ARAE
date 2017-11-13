@@ -4,7 +4,14 @@
 - PyTorch, JSON, Argparse
 - (Optional) KenLM (https://github.com/kpu/kenlm)
 
-## Pretrained Version
+### Helper scripts
+
+- **enc_training_sents**: use the trainer encoder to encode some sentences for hidden state 
+manipulations. The sentences together with the hidden states will be pickled as a Corpus object
+- **hidden_analysis**: takes a Corpus object and a trained decoder to run transformations and 
+decode in to sentences.
+
+<!-- ## Pretrained Version
 
 1) Download and unzip https://drive.google.com/drive/folders/0B4IZ6lmAKTWJSE9UNFYzUkphaVU?usp=sharing.
 
@@ -114,7 +121,7 @@ A group of <oov> walks is wearing sunglasses in a white box .
 A group of <oov> woman is putting people in a white shop with the window .
 ```
 
-
+-->
 ## Data Preparation
 
 ### SNLI Data Preparation
