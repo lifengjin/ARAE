@@ -61,7 +61,7 @@ class Dictionary(object):
 
 
 class Corpus(object):
-
+    # if labeled: the ones with no labels should be marked by -1
     def __init__(self, path, maxlen, vocab_size=11000, lowercase=False):
         self.dictionary = Dictionary()
         self.maxlen = maxlen
@@ -69,23 +69,25 @@ class Corpus(object):
         self.vocab_size = vocab_size
         self.train_path = os.path.join(path, 'train.txt')
         self.test_path = os.path.join(path, 'test.txt')
-
         # make the vocabulary from training set
         self.make_vocab()
 
-        self.train = self.tokenize(self.train_path)
-        self.test = self.tokenize(self.test_path)
+        self.train, self.train_labels = self.tokenize(self.train_path)
+        self.test, self.test_labels = self.tokenize(self.test_path)
 
     def make_vocab(self):
         assert os.path.exists(self.train_path)
         # Add words to the dictionary
         with open(self.train_path, 'r') as f:
             for line in f:
+                if '\t' in line: # the label is after \t in the same line
+                    line = line.strip().split('\t')[0]
                 if self.lowercase:
                     # -1 to get rid of \n character
-                    words = line[:-1].lower().split(" ")
+                    words = line.strip().lower().split(" ")
                 else:
-                    words = line[:-1].split(" ")
+                    words = line.strip().split(" ")
+
                 for word in words:
                     self.dictionary.add_word(word)
 
@@ -98,12 +100,20 @@ class Corpus(object):
         with open(path, 'r') as f:
             linecount = 0
             lines = []
+            labels = []
             for line in f:
                 linecount += 1
-                if self.lowercase:
-                    words = line[:-1].lower().strip().split(" ")
+                if '\t' in line:
+                    line = line.strip().split('\t')
+                    label = line[1]
+                    line = line[0]
+                    labels.append(int(label))
                 else:
-                    words = line[:-1].strip().split(" ")
+                    labels.append(-1)
+                if self.lowercase:
+                    words = line.lower().strip().split(" ")
+                else:
+                    words = line.strip().split(" ")
                 if len(words) > self.maxlen:
                     dropped += 1
                     continue
@@ -117,18 +127,21 @@ class Corpus(object):
 
         print("Number of sentences dropped from {}: {} out of {} total".
               format(path, dropped, linecount))
-        return lines
+        return lines, labels
 
 
-def batchify(data, bsz, shuffle=False, gpu=False):
+def batchify(data, labels, bsz, shuffle=False, gpu=False):
+    data_with_labels = zip(data,labels)
     if shuffle:
-        random.shuffle(data)
+        random.shuffle(data_with_labels)
     nbatch = len(data) // bsz
     batches = []
 
     for i in range(nbatch):
         # Pad batches to maximum sequence length in batch
-        batch = data[i*bsz:(i+1)*bsz]
+        batch = data_with_labels[i*bsz:(i+1)*bsz]
+        batch_labels = [t[1] for t in batch]
+        batch = [t[0] for t in batch]
         # subtract 1 from lengths b/c includes BOTH starts & end symbols
         lengths = [len(x)-1 for x in batch]
         # sort items by length (decreasing)
@@ -149,11 +162,14 @@ def batchify(data, bsz, shuffle=False, gpu=False):
         source = torch.LongTensor(np.array(source))
         target = torch.LongTensor(np.array(target)).view(-1)
 
+        labels = torch.LongTensor(np.array(batch_labels)).view(-1)
+
         if gpu:
             source = source.cuda()
             target = target.cuda()
+            labels = labels.cuda()
 
-        batches.append((source, target, lengths))
+        batches.append((source, target, lengths, labels))
 
     return batches
 

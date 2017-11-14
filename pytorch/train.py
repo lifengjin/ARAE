@@ -339,9 +339,10 @@ def train_ae(batch, total_loss_ae, start_time, i):
     autoencoder.train()
     autoencoder.zero_grad()
 
-    source, target, lengths = batch
+    source, target, lengths, labels = batch
     source = to_gpu(args.cuda, Variable(source))
     target = to_gpu(args.cuda, Variable(target))
+    labels = to_gpu(args.cuda, Variable(labels))
 
     # Create sentence length mask over padding
     mask = target.gt(0)
@@ -350,14 +351,20 @@ def train_ae(batch, total_loss_ae, start_time, i):
     output_mask = mask.unsqueeze(1).expand(mask.size(0), ntokens)
 
     # output: batch x seq_len x ntokens
-    output = autoencoder(source, lengths, noise=True)
+    output, pred_labels = autoencoder(source, lengths, noise=True)
+
+    # masked labels
+    mask = (labels != -1)
+    masked_labels = labels[mask]
+    masked_pred_labels = pred_labels[mask]
 
     # output_size: batch_size, maxlen, self.ntokens
     flattened_output = output.view(-1, ntokens)
 
     masked_output = \
         flattened_output.masked_select(output_mask).view(-1, ntokens)
-    loss = criterion_ce(masked_output/args.temp, masked_target)
+    loss = criterion_ce(masked_output/args.temp, masked_target) + F.cross_entropy(
+        masked_pred_labels, masked_labels)
     loss.backward()
 
     # `clip_grad_norm` to prevent exploding gradient in RNNs / LSTMs
@@ -438,7 +445,7 @@ def train_gan_d(batch):
 
     # positive samples ----------------------------
     # generate real codes
-    source, target, lengths = batch
+    source, target, lengths, labels = batch
     source = to_gpu(args.cuda, Variable(source))
     target = to_gpu(args.cuda, Variable(target))
 

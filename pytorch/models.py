@@ -9,6 +9,19 @@ import json
 import os
 import numpy as np
 
+class FeedForward(nn.Module):
+
+    def __init__(self, ninput, noutput):
+        super(FeedForward, self).__init__()
+        self.layer1 = nn.Linear(ninput, 400)
+        self.layer2 = nn.Linear(400, 400)
+        self.layer3 = nn.Linear(400, noutput)
+
+    def forward(self, x):
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
+        x = F.log_softmax(self.layer3(x))
+        return x
 
 class MLP_D(nn.Module):
     def __init__(self, ninput, noutput, layers,
@@ -100,7 +113,7 @@ class MLP_G(nn.Module):
 
 
 class Seq2Seq(nn.Module):
-    def __init__(self, emsize, nhidden, ntokens, nlayers, noise_radius=0.2,
+    def __init__(self, emsize, nhidden, ntokens, nlayers, noise_radius=0.2, nlabels=2,
                  hidden_init=False, dropout=0, gpu=False):
         super(Seq2Seq, self).__init__()
         self.nhidden = nhidden
@@ -135,6 +148,8 @@ class Seq2Seq(nn.Module):
         # Initialize Linear Transformation
         self.linear = nn.Linear(nhidden, ntokens)
 
+        self.label_predictor = FeedForward(nhidden, nlabels)
+
         self.init_weights()
 
     def init_weights(self):
@@ -148,6 +163,8 @@ class Seq2Seq(nn.Module):
         for p in self.encoder.parameters():
             p.data.uniform_(-initrange, initrange)
         for p in self.decoder.parameters():
+            p.data.uniform_(-initrange, initrange)
+        for p in self.label_predictor.parameters():
             p.data.uniform_(-initrange, initrange)
 
         # Initialize Linear Weight
@@ -173,6 +190,8 @@ class Seq2Seq(nn.Module):
 
         hidden = self.encode(indices, lengths, noise)
 
+        label_predictions = self.label_predictor(hidden)
+
         if encode_only:
             return hidden
 
@@ -182,7 +201,7 @@ class Seq2Seq(nn.Module):
         decoded = self.decode(hidden, batch_size, maxlen,
                               indices=indices, lengths=lengths)
 
-        return decoded
+        return decoded, label_predictions
 
     def encode(self, indices, lengths, noise):
         embeddings = self.embedding(indices)
