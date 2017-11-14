@@ -131,7 +131,7 @@ class Corpus(object):
 
 
 def batchify(data, labels, bsz, shuffle=False, gpu=False):
-    data_with_labels = zip(data,labels)
+    data_with_labels = list(zip(data,labels))
     if shuffle:
         random.shuffle(data_with_labels)
     nbatch = len(data) // bsz

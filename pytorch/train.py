@@ -155,8 +155,11 @@ with open("./output/{}/logs.txt".format(args.outf), 'w') as f:
     f.write("\n\n")
 
 eval_batch_size = 10
-test_data = batchify(corpus.test, eval_batch_size, shuffle=False)
-train_data = batchify(corpus.train, args.batch_size, shuffle=True)
+test_data = batchify(corpus.test, corpus.test_labels, eval_batch_size, shuffle=False)
+# print(corpus.test_labels)
+# print(corpus.train_labels)
+nlabels = max(corpus.train_labels) + 1
+train_data = batchify(corpus.train, corpus.train_labels, args.batch_size, shuffle=True)
 
 print("Loaded data!")
 
@@ -172,7 +175,8 @@ autoencoder = Seq2Seq(emsize=args.emsize,
                       noise_radius=args.noise_radius,
                       hidden_init=args.hidden_init,
                       dropout=args.dropout,
-                      gpu=args.cuda)
+                      gpu=args.cuda,
+                      nlabels=nlabels)
 
 gan_gen = MLP_G(ninput=args.z_size, noutput=args.nhidden, layers=args.arch_g)
 gan_disc = MLP_D(ninput=args.nhidden, noutput=1, layers=args.arch_d)
@@ -220,7 +224,7 @@ def evaluate_autoencoder(data_source, epoch):
     all_accuracies = 0
     bcnt = 0
     for i, batch in enumerate(data_source):
-        source, target, lengths = batch
+        source, target, lengths, labels = batch
         source = to_gpu(args.cuda, Variable(source, volatile=True))
         target = to_gpu(args.cuda, Variable(target, volatile=True))
 
@@ -230,7 +234,7 @@ def evaluate_autoencoder(data_source, epoch):
         output_mask = mask.unsqueeze(1).expand(mask.size(0), ntokens)
 
         # output: batch x seq_len x ntokens
-        output = autoencoder(source, lengths, noise=True)
+        output, pred_labels = autoencoder(source, lengths, noise=True)
         flattened_output = output.view(-1, ntokens)
 
         masked_output = \
@@ -356,14 +360,16 @@ def train_ae(batch, total_loss_ae, start_time, i):
     # masked labels
     mask = (labels != -1)
     masked_labels = labels[mask]
-    masked_pred_labels = pred_labels[mask]
+    # print('we have ', masked_labels.size(), '  labels')
+    mask_pred_labels = mask.unsqueeze(1)
+    masked_pred_labels = pred_labels[mask_pred_labels].view(-1, nlabels)
 
     # output_size: batch_size, maxlen, self.ntokens
     flattened_output = output.view(-1, ntokens)
 
     masked_output = \
         flattened_output.masked_select(output_mask).view(-1, ntokens)
-    loss = criterion_ce(masked_output/args.temp, masked_target) + F.cross_entropy(
+    loss = criterion_ce(masked_output/args.temp, masked_target) + criterion_ce(
         masked_pred_labels, masked_labels)
     loss.backward()
 
