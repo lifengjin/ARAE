@@ -61,6 +61,7 @@ class Dictionary(object):
 
 
 class Corpus(object):
+
     def __init__(self, path, maxlen, vocab_size=11000, lowercase=False):
         self.dictionary = Dictionary()
         self.maxlen = maxlen

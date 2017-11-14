@@ -122,7 +122,8 @@ for label in topk_labels_uniq:
     #     print(gaussian.cdf(hidden)**(1/300))
     for index1, row1 in enumerate(labeled_hiddens):
         for index2, row2 in enumerate(labeled_hiddens):
-            if not np.array_equal(row1, row2):
+            if not np.array_equal(row1, row2) and (labeled_text[index1], labeled_text[index2]) \
+                    not in text_pairs:
                 diffs.append(row2 - row1)
                 text_pairs.append((labeled_text[index1], labeled_text[index2]))
                 text_labels.append(label)
@@ -130,35 +131,30 @@ for label in topk_labels_uniq:
 # calculate the average var of the gaussians
 variances = np.mean(np.vstack(topk_gaussian_vars), 0)
 cov = np.diag(variances)
-print(variances)
 
 # assert False
 
 # clustering the transformations
+clusters_f = open("clusters_pairs.txt", "w")
 kmeans = KMeans(n_clusters=num_clusters)
 clusters = kmeans.fit_predict(diffs)
+point_distances = kmeans.transform(diffs)
+sorted_distances_indices = np.argsort(point_distances, 0)
 print(kmeans.cluster_centers_.shape)
-counter = 40
-counter_per_label = 4
-label_counter = np.zeros(args.topk)
-seen_texts = []
+print(len(diffs))
+
+counter = 20
+counter_per_label = 2
+
 for i in range(num_clusters):
-    this_counter = 0
-    for index, cluster_assignment in enumerate(clusters):
-        if cluster_assignment == i and label_counter[
-            topk_labels_uniq.index(text_labels[index])] < counter_per_label and \
-            text_pairs[index][0] not in seen_texts:
-            # print(i, text_pairs[index][0], '\t', text_pairs[index][1])
-            seen_texts.append(text_pairs[index][0])
-            # seen_texts.append(text_pairs[index][1])
-            this_counter += 1
-            label_counter[
-                topk_labels_uniq.index(text_labels[index])] += 1
-        if this_counter == counter:
-            label_counter = label_counter * 0
-            shuffle(seen_texts)
-            seen_texts = seen_texts[:len(seen_texts)//2]
-            break
+    topk_nearest = sorted_distances_indices[:, i][-counter*3:]
+    seen_text = []
+    for index in topk_nearest:
+        if text_pairs[index][0] not in seen_text:
+            print(i, text_pairs[index][0], '\t', text_pairs[index][1], file=clusters_f)
+            seen_text.append(text_pairs[index][0])
+
+clusters_f.close()
 
 # saving the cluster centers
 with open('cluster_centers.pkl', 'wb') as c:
@@ -182,15 +178,16 @@ for label_index, label in enumerate(label_freqs):
         for hidden in true_hiddens:
             label_gaussian = stats.multivariate_normal(hidden.squeeze(), cov)
             for index, center in enumerate(cluster_centers):
-                print(label, index)
+                # print(label, index)
                 counter = 0
                 while True:
                     new_sample = hidden+center
                     # if ave_prob > 0.4 and ave_prob < 0.9:
-                    if counter == 0 or counter == 5 or counter == 20:
+                    if counter == 0:
                         # ave_prob = label_gaussian.cdf(new_sample) ** (1 / 300)
                         # print(ave_prob)
                         generated_hiddens.append(LabeledHidden(label, hidden + center))
+                        break
 
                     counter += 1
                     center = center * 0.9
@@ -233,4 +230,4 @@ for idx in max_indices:
 # saving out the generated sentences
 with open('generated_sentences2.txt', 'w') as g:
     for index,s in enumerate(sentences):
-        print(generated_hiddens[index].label, index%3, s, sep='\t', file=g)
+        print(generated_hiddens[index].label, index%num_clusters, s, sep='\t', file=g)
